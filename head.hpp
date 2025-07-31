@@ -23,6 +23,9 @@ public:
           tokens.push_back("|");
           continue;
         }
+        if (ch == '#') {
+          break;
+        }
         if (ch == '\"') {
             ++i;
             while (i < text.size() && text[i] != '\"') {
@@ -55,8 +58,12 @@ public:
         tokens.push_back(buf);
         buf.clear();
     }
+    if(!tokens.empty()){
+      return tokens;
+    }else{
+      return {"Error"};
+    }
 
-    return tokens;
 }
 
     std::vector<std::string> split(const std::string& str, char delimiter) {

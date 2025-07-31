@@ -30,7 +30,8 @@ std::string trim(const std::string& str) {
     auto back  = std::find_if_not(str.rbegin(), str.rend(), ::isspace).base();
     return (front < back) ? std::string(front, back) : "";
 }
-void loadElircConfig(std::unordered_map<std::string, std::string>& envVars, const std::string& customPath = "") {
+void loadElircConfig(std::unordered_map<std::string, std::string>& alias,
+                     std::unordered_map<std::string, std::string>& envVars, const std::string& customPath = "") {
     std::string path;
     Eli eli;
 
@@ -102,12 +103,45 @@ void loadElircConfig(std::unordered_map<std::string, std::string>& envVars, cons
                 std::string value = tokens[2];
                 //setenv(key.c_str(), value.c_str(), 1);
                 envVars[key] = value;
+            }else if (cmd == "alias" && tokens.size() >= 3) {
+                int x = tokens[1].size();
+                std::string key = tokens[1].substr(0,x-1);
+                std::string value = tokens[2];
+                //setenv(key.c_str(), value.c_str(), 1);
+                alias[key] = value;
             }
             else if (cmd == "unset" && tokens.size() >= 2) {
                 std::string key = tokens[1];
                 envVars.erase(key);
             }
+            else if (cmd == "command" && tokens.size() >= 2) {
+            std::vector<char*> args;
+            tokens.erase(tokens.begin());
+            for (const auto& token : tokens)
+                args.push_back(strdup(token.c_str()));
+            args.push_back(nullptr);
 
+            pid_t pid = fork();
+            if (pid == 0) {
+                execvp(args[0], args.data());
+                std::cerr << "eli:\x1b[31m Failed to execute command: " << args[0] << "\x1b[0m\n";
+                if(envVars.count("TESTING") && envVars["TESTING"] == "ITME"){
+                  perror("📌 Reason");
+                }
+                exit(EXIT_FAILURE);
+            } else {
+                int status;
+                waitpid(pid, &status, 0);
+                if (WIFEXITED(status)) {
+                    int exitCode = WEXITSTATUS(status);
+                    envVars["?"] = std::to_string(exitCode);
+                    if(envVars.count("TESTING") && envVars["TESTING"] == "ITME"){
+                      std::cout << "\x1b[33meli exited with code: " << exitCode << "\x1b[0m\n";
+                    }
+                }
+            }
+            for (char* arg : args) free(arg);
+          }
             /*else {
                 std::cerr << "eli:\x1b[31m Unknown command or invalid format.\x1b[0m\n";
             }*/
@@ -241,7 +275,8 @@ int main() {
     Extra ex;
     ex.start("welcome");
     std::unordered_map<std::string, std::string> envVars = {{"version","0.1.0"}};
-    loadElircConfig(envVars);
+    std::unordered_map<std::string, std::string> alias ;
+    loadElircConfig(alias,envVars);
 
     enableRawMode();
     std::string prompt = envVars.count("PS1") ? envVars["PS1"] : "eli$ ";
@@ -264,7 +299,19 @@ int main() {
 
         Eli eli;
         std::vector<std::string> tokens = eli.program(line);
+        if (tokens[0] == "Error") continue;
 
+        size_t i = 0;
+        while (i < tokens.size()) {
+          const std::string& token = tokens[i];
+          if (alias.count(token)) {
+            std::vector<std::string> replacement = eli.program(alias[token]);
+            tokens.erase(tokens.begin() + i);
+            tokens.insert(tokens.begin() + i, replacement.begin(), replacement.end());
+          } else {
+            ++i; // وقتی alias نبود، برو به عنصر بعدی
+          }
+        }
         for (auto& token : tokens) {
             if (!token.empty() && token[0] == '$') {
                 std::string key = token.substr(1);
@@ -279,6 +326,7 @@ int main() {
               token = getenv("HOME")+key;
             }
         }
+
 
           auto pipePos = std::find(tokens.begin(), tokens.end(), "|");
           if (pipePos != tokens.end()) {
@@ -307,7 +355,7 @@ int main() {
                 continue;
             }
             if (tokens[0] == "source" && tokens.size() >= 2) {
-              loadElircConfig(envVars,tokens[1]);
+              loadElircConfig(alias,envVars,tokens[1]);
               continue;
             }
             if (tokens[0] == "cd") {
@@ -324,6 +372,11 @@ int main() {
             }if(tokens[0] == "set"){
               for(auto x : envVars){
                 std::cout<<"key: "<<x.first << "\tvalue: "<<x.second<<std::endl;
+              }
+              continue;
+            }if(tokens[0] == "alias"){
+              for(auto x : alias){
+                std::cout<<"|"<<x.first << "|"<<x.second<<"|"<<std::endl;
               }
               continue;
             }
