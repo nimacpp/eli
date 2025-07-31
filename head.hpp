@@ -18,7 +18,11 @@ public:
             ++i;
             continue;
         }
-
+        if (ch == '|') {
+          ++i;
+          tokens.push_back("|");
+          continue;
+        }
         if (ch == '\"') {
             ++i;
             while (i < text.size() && text[i] != '\"') {
@@ -29,6 +33,7 @@ public:
             if (i < text.size()) ++i;
             continue;
         }
+
         if (ch == '\'') {
             ++i;
             while (i < text.size() && text[i] != '\'') {
@@ -40,16 +45,7 @@ public:
             continue;
         }
 
-        if (std::isalpha(ch)) {
-            buf += ch;
-            ++i;
-            while (i < text.size() && std::isalnum(text[i])) {
-                buf += text[i++];
-            }
-            tokens.push_back(buf);
-            buf.clear();
-            continue;
-        }
+
 
         buf += ch;
         ++i;
